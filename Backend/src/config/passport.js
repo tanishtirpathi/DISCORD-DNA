@@ -37,7 +37,7 @@ assport.use(new DiscordStrategy({
   scope: ['identify', 'email', 'guilds'],
 }, async (accessToken, refreshToken, profile, done) => {
   return done(null, profile);
-}));
+}));  ` ` ` ` ``
 passport.deserializeUser((obj, done) => {
   done(null, obj);
 });
