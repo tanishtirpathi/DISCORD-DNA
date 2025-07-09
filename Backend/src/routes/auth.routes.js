@@ -1,34 +1,50 @@
+// src/routes/auth.routes.js
+
 import express from 'express';
-import axios from 'axios';
-import { CLIENT_ID, CLIENT_SECRET, REDIRECT_URI, FRONTEND_URL } from '../config/discord.js';
+import passport from '../config/passport.js';
+import { FRONTEND_URL } from '../config/discord.js';
 
 const router = express.Router();
 
-router.get('/login', (req, res) => {
-  const scope = ['identify', 'email', 'guilds'].join('%20');
-  const authURL = `https://discord.com/api/oauth2/authorize?client_id=${CLIENT_ID}&redirect_uri=${encodeURIComponent(REDIRECT_URI)}&response_type=code&scope=${scope}`;
-  res.redirect(authURL);
-});
-router.get('/callback', async (req, res) => {
-  const code = req.query.code;
-  const data = new URLSearchParams({
-    client_id: CLIENT_ID,
-    client_secret: CLIENT_SECRET,
-    grant_type: 'authorization_code',
-    code,
-    redirect_uri: REDIRECT_URI,
-    scope: 'identify email guilds email'
-  });
-  try {
-    const tokenResponse = await axios.post('https://discord.com/api/oauth2/token', data, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-    });
+// ✅ 1. Start Discord OAuth2 Login
+router.get('/login', passport.authenticate('discord'));
 
-    const accessToken = tokenResponse.data.access_token;
-    res.redirect(`${FRONTEND_URL}/dashboard?token=${accessToken}`);
-  } catch (err) {
-    console.error(err.response.data);
-    res.status(500).send("OAuth2 Login Failed");
+// ✅ 2. Discord OAuth2 Callback
+router.get(
+  '/callback',
+  passport.authenticate('discord', {
+    failureRedirect: `${FRONTEND_URL}/login`,
+    session: true,
+  }),
+  (req, res) => {
+    const user = req.user;
+
+    if (!user) {
+      return res.redirect(`${FRONTEND_URL}/login?error=no-user`);
+    }
+
+    // ⚠️ Avoid sending sensitive info like tokens via query
+    const userInfo = encodeURIComponent(
+      JSON.stringify({
+        id: user.id,
+        username: user.username,
+        avatar: user.avatar,
+        discriminator: user.discriminator,
+        email: user.email,
+        guilds: user.guilds,
+      })
+    );
+
+    res.redirect(`${FRONTEND_URL}/dashboard?user=${userInfo}`);
   }
+);
+
+// ✅ 3. Logout Route (optional)
+router.get('/logout', (req, res, next) => {
+  req.logout((err) => {
+    if (err) return next(err);
+    res.redirect(`${FRONTEND_URL}/login`);
+  });
 });
+
 export default router;
